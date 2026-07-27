@@ -348,6 +348,8 @@ jobs:
             defines: "-DSD_CUDA=ON -DSD_BUILD_SHARED_LIBS=ON -DCMAKE_CUDA_ARCHITECTURES='61;70;75;80;86;89;90;100;120' -DCMAKE_CUDA_FLAGS='-Xcudafe \"--diag_suppress=177\" -Xcudafe \"--diag_suppress=550\"' -DGGML_NATIVE=OFF -DSD_BUILD_SHARED_GGML_LIB=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON"
           - build: "vulkan"
             defines: "-DSD_VULKAN=ON -DSD_BUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF -DSD_BUILD_SHARED_GGML_LIB=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON"
+          - build: "cuda12-vulkan"
+            defines: "-DSD_CUDA=ON -DSD_VULKAN=ON -DSD_BUILD_SHARED_LIBS=ON -DCMAKE_CUDA_ARCHITECTURES='61;70;75;80;86;89;90;100;120' -DCMAKE_CUDA_FLAGS='-Xcudafe \"--diag_suppress=177\" -Xcudafe \"--diag_suppress=550\"' -DGGML_NATIVE=OFF -DSD_BUILD_SHARED_GGML_LIB=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON"
     steps:
       - name: Clone
         id: checkout
@@ -367,7 +369,7 @@ jobs:
 
       - name: Install cuda-toolkit
         id: cuda-toolkit
-        if: ${{ matrix.build == 'cuda12' }}
+        if: ${{ matrix.build == 'cuda12' || matrix.build == 'cuda12-vulkan' }}
         uses: Jimver/cuda-toolkit@v0.2.22
         with:
           cuda: "12.8.1"
@@ -376,7 +378,7 @@ jobs:
 
       - name: Install Vulkan SDK
         id: get_vulkan
-        if: ${{ matrix.build == 'vulkan' }}
+        if: ${{ matrix.build == 'vulkan' || matrix.build == 'cuda12-vulkan' }}
         run: |
           curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
           & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
@@ -422,20 +424,20 @@ jobs:
 
       - name: Copy and pack Cuda runtime
         id: pack_cuda_runtime
-        if: ${{ matrix.build == 'cuda12' && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event.inputs.create_release == 'true') }}
+        if: ${{ (matrix.build == 'cuda12' || matrix.build == 'cuda12-vulkan') && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event.inputs.create_release == 'true') }}
         run: |
           echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
           $dst='.\build\bin\cudart\'
           robocopy "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
-          7z a cudart-sd-bin-win-cu12-x64.zip $dst\*
+          7z a cudart-sd-bin-win-${{ matrix.build }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
-        if: ${{ matrix.build == 'cuda12' && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event.inputs.create_release == 'true') }}
+        if: ${{ (matrix.build == 'cuda12' || matrix.build == 'cuda12-vulkan') && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event.inputs.create_release == 'true') }}
         uses: actions/upload-artifact@v4
         with:
-          name: sd-cudart-sd-bin-win-cu12-x64.zip
+          name: sd-cudart-sd-bin-win-${{ matrix.build }}-x64.zip
           path: |
-            cudart-sd-bin-win-cu12-x64.zip
+            cudart-sd-bin-win-${{ matrix.build }}-x64.zip
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
